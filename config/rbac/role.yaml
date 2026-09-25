@@ -1,0 +1,62 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - get
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  - jobs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cache.denzil-briffa.github.io
+  resources:
+  - imagewarmuppolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cache.denzil-briffa.github.io
+  resources:
+  - imagewarmuppolicies/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cache.denzil-briffa.github.io
+  resources:
+  - imagewarmuppolicies/status
+  verbs:
+  - get
+  - patch
+  - update

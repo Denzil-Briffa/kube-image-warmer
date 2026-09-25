@@ -1,0 +1,22 @@
+apiVersion: cache.denzil-briffa.github.io/v1alpha1
+kind: ImageWarmupPolicy
+metadata:
+  labels:
+    app.kubernetes.io/name: kube-image-warmer
+    app.kubernetes.io/managed-by: kustomize
+  name: imagewarmuppolicy-sample
+spec:
+  suspend: false
+  #namespaceSelector:
+  #  matchLabels:
+  #    scan: enabled
+  #namespaceList:
+  #  - default
+  namespaceSkipList:
+    - kube-system
+  #workLoadSelector:
+  #  matchLabels:
+  #    image-warmup: enabled
+  #workLoadSkipSelector:
+  #  matchLabels:
+  #    image-warmup: disabled

@@ -54,6 +54,16 @@ type ImageWarmupPolicySpec struct {
 	// An omitted or empty selector excludes no workloads.
 	// +optional
 	WorkloadSkipSelector metav1.LabelSelector `json:"workloadSkipSelector,omitempty"`
+
+	// NodeSelector selects the nodes by their labels.
+	// An omitted or empty selector does not include additional restrictions.
+	// +optional
+	NodeSelector metav1.LabelSelector `json:"nodeSelector,omitempty"`
+
+	// NodeSkipSelector excludes the nodes by their labels.
+	// An omitted or empty selector excludes no nodes.
+	// +optional
+	NodeSkipSelector metav1.LabelSelector `json:"nodeSkipSelector,omitempty"`
 }
 
 // ImageWarmupPolicyStatus defines the observed state of ImageWarmupPolicy.

@@ -12,11 +12,17 @@ spec:
   #    scan: enabled
   #namespaceList:
   #  - default
-  namespaceSkipList:
-    - kube-system
+  #namespaceSkipList:
+  #  - kube-system
   #workLoadSelector:
   #  matchLabels:
   #    image-warmup: enabled
   #workLoadSkipSelector:
   #  matchLabels:
   #    image-warmup: disabled
+  #nodeSelector:
+  #  matchLabels:
+  #    kubernetes.io/hostname: talos-1
+  #nodeSkipSelector:
+  #  matchLabels:
+  #    kubernetes.io/hostname: talos-3

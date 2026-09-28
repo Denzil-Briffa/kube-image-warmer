@@ -49,6 +49,7 @@ type ImageWarmupPolicyReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments;statefulsets;daemonsets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=batch,resources=jobs;cronjobs,verbs=get;list;watch
 
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get
@@ -104,6 +105,14 @@ func (r *ImageWarmupPolicyReconciler) Reconcile(
 		}
 
 		allowedNamespaces[namespace.Name] = true
+	}
+
+	nodeSelection, err := r.selectHealthyNodes(
+		ctx,
+		&policy,
+	)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Build a list of workloads to go through and discover images from.
@@ -258,6 +267,10 @@ func (r *ImageWarmupPolicyReconciler) Reconcile(
 		"Image discovery completed",
 		"policy", policy.Name,
 		"selectedNamespaces", len(allowedNamespaces),
+		"matchedNodes", nodeSelection.matchedNodeCount,
+		"selectedNodes", nodeSelection.selectedNodeCount,
+		"healthyNodes", len(nodeSelection.healthyNodes),
+		"skippedNodeReasons", nodeSelection.skippedReasons,
 		"deployments", len(deployments.Items),
 		"statefulSets", len(statefulSets.Items),
 		"daemonSets", len(daemonSets.Items),

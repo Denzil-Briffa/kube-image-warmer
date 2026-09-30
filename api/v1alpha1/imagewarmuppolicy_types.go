@@ -30,6 +30,35 @@ type ImageWarmupPolicySpec struct {
 	// +optional
 	Suspend bool `json:"suspend,omitempty"`
 
+	// BackoffLimit is the number of retries allowed when the job fails.
+	// +optional
+	// +kubebuilder:default=0
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10
+	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
+
+	// ActiveDeadlineSeconds is the maximum total runtime of a warming Job.
+	// +optional
+	// +kubebuilder:default=300
+	// +kubebuilder:validation:Minimum=30
+	// +kubebuilder:validation:Maximum=86400
+	ActiveDeadlineSeconds *int64 `json:"activeDeadlineSeconds,omitempty"`
+
+	// TTLSecondsAfterFinished controls how long a completed warming Job is retained.
+	// +optional
+	// +kubebuilder:default=3600
+	// +kubebuilder:validation:Minimum=60
+	// +kubebuilder:validation:Maximum=604800
+	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty"`
+
+	// MaxConcurrentJobs limits how many warming Jobs may be active at the same time.
+	// All targets are still attempted as capacity becomes available.
+	// +optional
+	// +kubebuilder:default=4
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100
+	MaxConcurrentJobs *int32 `json:"maxConcurrentJobs,omitempty"`
+
 	// NamespaceSelector selects the namespaces by their labels.
 	// An omitted or empty selector does not include additional restrictions.
 	// +optional
@@ -66,12 +95,59 @@ type ImageWarmupPolicySpec struct {
 	NodeSkipSelector metav1.LabelSelector `json:"nodeSkipSelector,omitempty"`
 }
 
+// ImageWarmupRunTrigger identifies what started a warming run.
+type ImageWarmupRunTrigger string
+
+const (
+	ImageWarmupRunTriggerInitial   ImageWarmupRunTrigger = "Initial"
+	ImageWarmupRunTriggerScheduled ImageWarmupRunTrigger = "Scheduled"
+	ImageWarmupRunTriggerNode      ImageWarmupRunTrigger = "Node"
+)
+
+type ImageWarmupRunSummary struct {
+	ID             string                `json:"id"`
+	Trigger        ImageWarmupRunTrigger `json:"trigger"`
+	TargetCount    int32                 `json:"targetCount"`
+	SucceededCount int32                 `json:"succeededCount"`
+	FailedCount    int32                 `json:"failedCount"`
+	CompletionTime metav1.Time           `json:"completionTime"`
+}
+
 // ImageWarmupPolicyStatus defines the observed state of ImageWarmupPolicy.
 type ImageWarmupPolicyStatus struct {
 	// DiscoveredImageCount is the number of distinct image references
 	// found during the most recent successful discovery.
 	// +optional
 	DiscoveredImageCount int32 `json:"discoveredImageCount,omitempty"`
+
+	// CurrentRunID identifies the active warming run.
+	// It remains stable across repeated reconciliations and controller restarts.
+	// +optional
+	CurrentRunID string `json:"currentRunID,omitempty"`
+
+	// CurrentRunTrigger records what started the active run.
+	// +optional
+	CurrentRunTrigger ImageWarmupRunTrigger `json:"currentRunTrigger,omitempty"`
+
+	// CurrentRunTargetCount is the desired number of targets in the active run.
+	// +optional
+	CurrentRunTargetCount int32 `json:"currentRunTargetCount,omitempty"`
+
+	// CurrentRunActiveCount is the number of nonterminal Jobs in the active run.
+	// +optional
+	CurrentRunActiveCount int32 `json:"currentRunActiveCount,omitempty"`
+
+	// CurrentRunSucceededCount is the number of successful Jobs in the active run.
+	// +optional
+	CurrentRunSucceededCount int32 `json:"currentRunSucceededCount,omitempty"`
+
+	// CurrentRunFailedCount is the number of failed Jobs in the active run.
+	// +optional
+	CurrentRunFailedCount int32 `json:"currentRunFailedCount,omitempty"`
+
+	// LastFinishedRun stores one bounded summary of the most recently finished run.
+	// +optional
+	LastFinishedRun *ImageWarmupRunSummary `json:"lastFinishedRun,omitempty"`
 }
 
 // +kubebuilder:object:root=true

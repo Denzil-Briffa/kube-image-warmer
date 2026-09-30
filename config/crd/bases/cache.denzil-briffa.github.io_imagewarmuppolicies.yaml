@@ -39,6 +39,31 @@ spec:
           spec:
             description: spec defines the desired state of ImageWarmupPolicy
             properties:
+              activeDeadlineSeconds:
+                default: 300
+                description: ActiveDeadlineSeconds is the maximum total runtime of
+                  a warming Job.
+                format: int64
+                maximum: 86400
+                minimum: 30
+                type: integer
+              backoffLimit:
+                default: 0
+                description: BackoffLimit is the number of retries allowed when the
+                  job fails.
+                format: int32
+                maximum: 10
+                minimum: 0
+                type: integer
+              maxConcurrentJobs:
+                default: 4
+                description: |-
+                  MaxConcurrentJobs limits how many warming Jobs may be active at the same time.
+                  All targets are still attempted as capacity becomes available.
+                format: int32
+                maximum: 100
+                minimum: 1
+                type: integer
               namespaceList:
                 description: |-
                   NamespaceList selects the namespaces by their names.
@@ -201,6 +226,14 @@ spec:
                 description: Suspend prevents the operator from starting new warming
                   work.
                 type: boolean
+              ttlSecondsAfterFinished:
+                default: 3600
+                description: TTLSecondsAfterFinished controls how long a completed
+                  warming Job is retained.
+                format: int32
+                maximum: 604800
+                minimum: 60
+                type: integer
               workloadSelector:
                 description: |-
                   WorkLoadSelector select the source workloads based on the labels.
@@ -301,12 +334,70 @@ spec:
           status:
             description: status defines the observed state of ImageWarmupPolicy
             properties:
+              currentRunActiveCount:
+                description: CurrentRunActiveCount is the number of nonterminal Jobs
+                  in the active run.
+                format: int32
+                type: integer
+              currentRunFailedCount:
+                description: CurrentRunFailedCount is the number of failed Jobs in
+                  the active run.
+                format: int32
+                type: integer
+              currentRunID:
+                description: |-
+                  CurrentRunID identifies the active warming run.
+                  It remains stable across repeated reconciliations and controller restarts.
+                type: string
+              currentRunSucceededCount:
+                description: CurrentRunSucceededCount is the number of successful
+                  Jobs in the active run.
+                format: int32
+                type: integer
+              currentRunTargetCount:
+                description: CurrentRunTargetCount is the desired number of targets
+                  in the active run.
+                format: int32
+                type: integer
+              currentRunTrigger:
+                description: CurrentRunTrigger records what started the active run.
+                type: string
               discoveredImageCount:
                 description: |-
                   DiscoveredImageCount is the number of distinct image references
                   found during the most recent successful discovery.
                 format: int32
                 type: integer
+              lastFinishedRun:
+                description: LastFinishedRun stores one bounded summary of the most
+                  recently finished run.
+                properties:
+                  completionTime:
+                    format: date-time
+                    type: string
+                  failedCount:
+                    format: int32
+                    type: integer
+                  id:
+                    type: string
+                  succeededCount:
+                    format: int32
+                    type: integer
+                  targetCount:
+                    format: int32
+                    type: integer
+                  trigger:
+                    description: ImageWarmupRunTrigger identifies what started a warming
+                      run.
+                    type: string
+                required:
+                - completionTime
+                - failedCount
+                - id
+                - succeededCount
+                - targetCount
+                - trigger
+                type: object
             type: object
         required:
         - spec

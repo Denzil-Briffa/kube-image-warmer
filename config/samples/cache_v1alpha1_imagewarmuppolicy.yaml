@@ -7,6 +7,10 @@ metadata:
   name: imagewarmuppolicy-sample
 spec:
   suspend: false
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 3600
+  maxConcurrentJobs: 4
   #namespaceSelector:
   #  matchLabels:
   #    scan: enabled

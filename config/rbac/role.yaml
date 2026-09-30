@@ -34,8 +34,16 @@ rules:
   - batch
   resources:
   - cronjobs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
   - jobs
   verbs:
+  - create
   - get
   - list
   - watch

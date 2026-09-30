@@ -47,7 +47,8 @@ type ImageWarmupPolicyReconciler struct {
 // +kubebuilder:rbac:groups=cache.denzil-briffa.github.io,resources=imagewarmuppolicies/finalizers,verbs=update
 
 // +kubebuilder:rbac:groups=apps,resources=deployments;statefulsets;daemonsets,verbs=get;list;watch
-// +kubebuilder:rbac:groups=batch,resources=jobs;cronjobs,verbs=get;list;watch
+// +kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;list;watch
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create
 
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
@@ -242,13 +243,11 @@ func (r *ImageWarmupPolicyReconciler) Reconcile(
 
 	imageCount := int32(len(uniqueImages))
 
+	statusChanged := ensureInitialWarmupRunState(&policy)
+
 	if policy.Status.DiscoveredImageCount != imageCount {
 		policy.Status.DiscoveredImageCount = imageCount
-
-		err = r.Status().Update(ctx, &policy)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
+		statusChanged = true
 	}
 
 	resolvedImages, err := resolveImagePullSecrets(
@@ -262,6 +261,32 @@ func (r *ImageWarmupPolicyReconciler) Reconcile(
 	}
 
 	imagePullContexts := deduplicateImagePullContexts(resolvedImages)
+
+	warmupSummary, err := r.ensureCurrentWarmupRunJobs(
+		ctx,
+		&policy,
+		nodeSelection.healthyNodes,
+		imagePullContexts,
+	)
+	if err != nil {
+		logger.Error(err, "Could not reconcile warming Jobs")
+		return ctrl.Result{}, err
+	}
+
+	if applyWarmupExecutionSummary(
+		&policy,
+		warmupSummary,
+		metav1.Now(),
+	) {
+		statusChanged = true
+	}
+
+	if statusChanged {
+		err = r.Status().Update(ctx, &policy)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	logger.Info(
 		"Image discovery completed",
@@ -278,6 +303,9 @@ func (r *ImageWarmupPolicyReconciler) Reconcile(
 		"uniqueImages", imageCount,
 		"resolvedImageContexts", len(resolvedImages),
 		"uniqueImagePullContexts", len(imagePullContexts),
+		"createdWarmupJobs", warmupSummary.createdCount,
+		"existingWarmupJobs", warmupSummary.existingCount,
+		"warmupSkippedReasons", warmupSummary.skippedReasons,
 	)
 
 	return ctrl.Result{}, nil
@@ -318,6 +346,7 @@ func addDiscoveredImages(
 func (r *ImageWarmupPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cachev1alpha1.ImageWarmupPolicy{}).
+		Owns(&batchv1.Job{}).
 		Named("imagewarmuppolicy").
 		Complete(r)
 }

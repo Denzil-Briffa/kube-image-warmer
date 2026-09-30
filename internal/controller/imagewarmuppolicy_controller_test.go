@@ -38,8 +38,7 @@ import (
 var _ = Describe("ImageWarmupPolicy Controller", func() {
 	Context("When reconciling a resource", func() {
 		const (
-			resourceName      = "test-resource"
-			defaultObjectName = "default"
+			resourceName = "test-resource"
 		)
 
 		ctx := context.Background()
@@ -173,6 +172,22 @@ var _ = Describe("ImageWarmupPolicy Controller", func() {
 				To(Succeed())
 
 			Expect(updatedPolicy.Status.DiscoveredImageCount).To(Equal(int32(5)))
+
+			Expect(updatedPolicy.Status.CurrentRunID).To(BeEmpty())
+			Expect(updatedPolicy.Status.CurrentRunTrigger).To(BeEmpty())
+			Expect(updatedPolicy.Status.LastFinishedRun).NotTo(BeNil())
+
+			finishedRun := updatedPolicy.Status.LastFinishedRun
+
+			Expect(finishedRun.ID).To(Equal(
+				initialWarmupRunPrefix + string(updatedPolicy.UID),
+			))
+			Expect(finishedRun.Trigger).To(Equal(
+				cachev1alpha1.ImageWarmupRunTriggerInitial,
+			))
+			Expect(finishedRun.TargetCount).To(Equal(int32(0)))
+			Expect(finishedRun.SucceededCount).To(Equal(int32(0)))
+			Expect(finishedRun.FailedCount).To(Equal(int32(0)))
 		})
 
 		It("should set the image count to zero when no namespaces match", func() {
@@ -263,7 +278,7 @@ var _ = Describe("ImageWarmupPolicy Controller", func() {
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{
 									{
-										Name:  "application",
+										Name:  testApplicationName,
 										Image: image,
 									},
 								},

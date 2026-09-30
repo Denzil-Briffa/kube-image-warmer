@@ -1,0 +1,118 @@
+package controller
+
+import (
+	"maps"
+	"slices"
+
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	cachev1alpha1 "github.com/Denzil-Briffa/kube-image-warmer/api/v1alpha1"
+	"github.com/Denzil-Briffa/kube-image-warmer/internal/discovery"
+)
+
+const (
+	managedByLabelKey     = "app.kubernetes.io/managed-by"
+	managedByLabelValue   = "kube-image-warmer"
+	policyUIDLabelKey     = "cache.denzil-briffa.github.io/policy-uid"
+	targetNodeUIDLabelKey = "cache.denzil-briffa.github.io/target-node-uid"
+	runIDLabelKey         = "cache.denzil-briffa.github.io/run-id"
+)
+
+func buildWarmupJob(
+	policy *cachev1alpha1.ImageWarmupPolicy,
+	targetNode *corev1.Node,
+	image discovery.DiscoveredImage,
+	runID string,
+) *batchv1.Job {
+	automountServiceAccountToken := false
+	backoffLimit := int32(0)
+	if policy.Spec.BackoffLimit != nil {
+		backoffLimit = *policy.Spec.BackoffLimit
+	}
+
+	activeDeadlineSeconds := int64(300)
+	if policy.Spec.ActiveDeadlineSeconds != nil {
+		activeDeadlineSeconds = *policy.Spec.ActiveDeadlineSeconds
+	}
+
+	ttlSecondsAfterFinished := int32(3600)
+	if policy.Spec.TTLSecondsAfterFinished != nil {
+		ttlSecondsAfterFinished = *policy.Spec.TTLSecondsAfterFinished
+	}
+
+	labels := map[string]string{
+		managedByLabelKey:     managedByLabelValue,
+		policyUIDLabelKey:     string(policy.UID),
+		targetNodeUIDLabelKey: string(targetNode.UID),
+		runIDLabelKey:         runID,
+	}
+
+	jobName := warmupJobName(
+		policy,
+		runID,
+		targetNode,
+		image,
+	)
+
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: image.Namespace,
+			Labels:    labels,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(
+					policy,
+					cachev1alpha1.GroupVersion.WithKind("ImageWarmupPolicy"),
+				),
+			},
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit:            &backoffLimit,
+			ActiveDeadlineSeconds:   &activeDeadlineSeconds,
+			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: maps.Clone(labels),
+				},
+				Spec: corev1.PodSpec{
+					RestartPolicy:                corev1.RestartPolicyNever,
+					AutomountServiceAccountToken: &automountServiceAccountToken,
+					ImagePullSecrets:             slices.Clone(image.ImagePullSecrets),
+					Affinity: &corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
+									{
+										MatchFields: []corev1.NodeSelectorRequirement{
+											{
+												Key:      "metadata.name",
+												Operator: corev1.NodeSelectorOpIn,
+												Values: []string{
+													targetNode.Name,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Containers: []corev1.Container{
+						{
+							Name:            "image-puller",
+							Image:           image.Image,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Command: []string{
+								"/bin/sh",
+								"-c",
+								"exit 0",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}

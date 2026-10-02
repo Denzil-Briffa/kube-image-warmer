@@ -265,7 +265,7 @@ endef
 ##@ Helm release packaging
 
 HELM ?= helm
-VERSION ?= 0.1.0
+VERSION ?= 0.1.1
 CHART_REGISTRY ?= oci://ghcr.io/denzil-briffa/charts
 export SCHEDULE VERSION CHART_REGISTRY
 

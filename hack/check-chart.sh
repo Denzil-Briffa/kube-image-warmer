@@ -19,6 +19,30 @@ schedule="${SCHEDULE:?Set SCHEDULE to a five-field cron expression for validatio
   --set serviceAccount.create=false \
   --set-string serviceAccount.name=existing-controller >/dev/null
 
+
+# Exercise an aliased dependency as used by the GitOps wrapper. Helm propagates
+# its reserved global object into subcharts even when it is empty.
+wrapper_dir="$(mktemp -d)"
+trap 'rm -rf -- "$wrapper_dir"' EXIT
+mkdir -p "$wrapper_dir/charts"
+cp -R -- "$chart_dir" "$wrapper_dir/charts/image-warmer"
+cat > "$wrapper_dir/Chart.yaml" <<'YAML'
+apiVersion: v2
+name: wrapper-check
+version: 0.1.0
+dependencies:
+  - name: image-warmer
+    alias: kube-image-warmer
+    version: "*"
+YAML
+"$helm_bin" template wrapper-check "$wrapper_dir" \
+  --namespace image-warmer-system --include-crds \
+  --set-string "kube-image-warmer.operator.schedule=$schedule" >/dev/null
+"$helm_bin" template wrapper-check "$wrapper_dir" \
+  --namespace image-warmer-system \
+  --set-string "kube-image-warmer.operator.schedule=$schedule" \
+  --set-string global.example=wrapper-check >/dev/null
+
 expect_invalid() {
   if "$helm_bin" template image-warmer "$chart_dir" \
       --set-string "operator.schedule=$schedule" "$@" >/dev/null 2>&1; then

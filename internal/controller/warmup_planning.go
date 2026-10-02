@@ -94,6 +94,19 @@ func selectPendingWarmupTargets(
 	slices.SortFunc(
 		pendingTargets,
 		func(first warmupTarget, second warmupTarget) int {
+			firstIsNewNode := slices.Contains(
+				policy.Status.PendingNodeUIDs, string(first.node.UID),
+			)
+			secondIsNewNode := slices.Contains(
+				policy.Status.PendingNodeUIDs, string(second.node.UID),
+			)
+			if firstIsNewNode != secondIsNewNode {
+				if firstIsNewNode {
+					return -1
+				}
+				return 1
+			}
+
 			if namespaceComparison := cmp.Compare(
 				first.image.Namespace,
 				second.image.Namespace,
@@ -113,6 +126,25 @@ func selectPendingWarmupTargets(
 	}
 
 	return pendingTargets
+}
+
+func countDesiredWarmupTargets(
+	policy *cachev1alpha1.ImageWarmupPolicy,
+	nodes []*corev1.Node,
+	images []discovery.DiscoveredImage,
+	inventory warmupJobInventory,
+) int {
+	keys := make(map[types.NamespacedName]bool, len(inventory.currentRunJobs))
+	for key := range inventory.currentRunJobs {
+		keys[key] = true
+	}
+	for _, target := range buildWarmupTargets(nodes, images) {
+		keys[types.NamespacedName{
+			Name:      warmupJobName(policy, policy.Status.CurrentRunID, target.node, target.image),
+			Namespace: target.image.Namespace,
+		}] = true
+	}
+	return len(keys)
 }
 
 func planPendingWarmupTargets(

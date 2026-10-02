@@ -8,6 +8,8 @@ import (
 const (
 	nodeReasonEligible              = "eligible"
 	nodeReasonMissing               = "node-missing"
+	nodeReasonReplaced              = "node-replaced"
+	nodeReasonNoLongerSelected      = "node-no-longer-selected"
 	nodeReasonUnschedulable         = "node-unschedulable"
 	nodeReasonReadyConditionMissing = "ready-condition-missing"
 	nodeReasonNotReady              = "node-not-ready"

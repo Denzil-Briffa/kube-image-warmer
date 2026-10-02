@@ -20,6 +20,7 @@ type warmupJobInventory struct {
 	activeCount      int
 	existingJobs     map[types.NamespacedName]bool
 	currentRunCounts warmupRunJobCounts
+	currentRunJobs   map[types.NamespacedName]bool
 }
 
 type warmupRunJobCounts struct {
@@ -176,12 +177,31 @@ func buildWarmupJobInventory(
 			policy,
 			jobs,
 		),
+		currentRunJobs: currentWarmupRunJobKeys(policy, currentRunID, jobs),
 		currentRunCounts: countWarmupRunJobs(
 			policy,
 			currentRunID,
 			jobs,
 		),
 	}
+}
+
+func currentWarmupRunJobKeys(
+	policy *cachev1alpha1.ImageWarmupPolicy,
+	runID string,
+	jobs []batchv1.Job,
+) map[types.NamespacedName]bool {
+	keys := make(map[types.NamespacedName]bool, len(jobs))
+	if policy == nil || runID == "" {
+		return keys
+	}
+	for i := range jobs {
+		job := &jobs[i]
+		if metav1.IsControlledBy(job, policy) && job.Labels[runIDLabelKey] == runID {
+			keys[types.NamespacedName{Name: job.Name, Namespace: job.Namespace}] = true
+		}
+	}
+	return keys
 }
 
 func countWarmupRunJobs(

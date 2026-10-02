@@ -349,6 +349,11 @@ spec:
                   CurrentRunID identifies the active warming run.
                   It remains stable across repeated reconciliations and controller restarts.
                 type: string
+              currentRunNodeUID:
+                description: |-
+                  CurrentRunNodeUID identifies the target of an active node-triggered run.
+                  It is empty for initial and scheduled full-cluster runs.
+                type: string
               currentRunSucceededCount:
                 description: CurrentRunSucceededCount is the number of successful
                   Jobs in the active run.
@@ -368,6 +373,15 @@ spec:
                   found during the most recent successful discovery.
                 format: int32
                 type: integer
+              handledNodeUIDs:
+                description: |-
+                  HandledNodeUIDs identifies Nodes baselined during feature initialization
+                  or covered by a finished warming attempt. It does not imply every pull
+                  succeeded or that the images remain cached.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
               lastFinishedRun:
                 description: LastFinishedRun stores one bounded summary of the most
                   recently finished run.
@@ -379,6 +393,8 @@ spec:
                     format: int32
                     type: integer
                   id:
+                    type: string
+                  nodeUID:
                     type: string
                   succeededCount:
                     format: int32
@@ -398,6 +414,23 @@ spec:
                 - targetCount
                 - trigger
                 type: object
+              nextScheduledRunTime:
+                description: |-
+                  NextScheduledRunTime is the persisted next full-cluster cron occurrence.
+                  The cron expression is evaluated using the operator process local timezone.
+                format: date-time
+                type: string
+              nodeCoverageInitialized:
+                description: NodeCoverageInitialized records that existing eligible
+                  Nodes were baselined.
+                type: boolean
+              pendingNodeUIDs:
+                description: PendingNodeUIDs identifies newly eligible Nodes waiting
+                  for warming.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
             type: object
         required:
         - spec

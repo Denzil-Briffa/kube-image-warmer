@@ -319,13 +319,9 @@ func TestBuildWarmupJobConfiguresLifecycleLimits(t *testing.T) {
 		)
 	}
 
-	if job.Spec.TTLSecondsAfterFinished == nil {
-		t.Fatal("expected ttlSecondsAfterFinished to be configured")
-	}
-
-	if *job.Spec.TTLSecondsAfterFinished != 3600 {
+	if job.Spec.TTLSecondsAfterFinished != nil {
 		t.Errorf(
-			"expected ttlSecondsAfterFinished 3600, got %d",
+			"expected ttlSecondsAfterFinished to be deferred, got %d",
 			*job.Spec.TTLSecondsAfterFinished,
 		)
 	}
@@ -389,14 +385,9 @@ func TestBuildWarmupJobUsesPolicyLifecycleSettings(t *testing.T) {
 		)
 	}
 
-	if job.Spec.TTLSecondsAfterFinished == nil {
-		t.Fatal("expected ttlSecondsAfterFinished to be configured")
-	}
-
-	if *job.Spec.TTLSecondsAfterFinished != ttlSecondsAfterFinished {
+	if job.Spec.TTLSecondsAfterFinished != nil {
 		t.Errorf(
-			"expected ttlSecondsAfterFinished %d, got %d",
-			ttlSecondsAfterFinished,
+			"expected ttlSecondsAfterFinished to be deferred, got %d",
 			*job.Spec.TTLSecondsAfterFinished,
 		)
 	}

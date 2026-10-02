@@ -37,6 +37,7 @@ import (
 
 	cachev1alpha1 "github.com/Denzil-Briffa/kube-image-warmer/api/v1alpha1"
 	"github.com/Denzil-Briffa/kube-image-warmer/internal/controller"
+	"github.com/Denzil-Briffa/kube-image-warmer/internal/scheduling"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -55,6 +56,7 @@ func init() {
 // nolint:gocyclo
 func main() {
 	var metricsAddr string
+	var scheduleExpression string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
 	var webhookPort int
@@ -63,6 +65,9 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
+	flag.StringVar(&scheduleExpression, "schedule", "",
+		"Required five-field cron schedule for full-cluster warming. "+
+			"The operator evaluates it using its local clock and timezone.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -89,6 +94,16 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	warmingSchedule, err := scheduling.Parse(scheduleExpression)
+	if err != nil {
+		setupLog.Error(
+			err,
+			"Invalid warming schedule",
+			"schedule", scheduleExpression,
+		)
+		os.Exit(1)
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -183,8 +198,9 @@ func main() {
 	}
 
 	if err := (&controller.ImageWarmupPolicyReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Schedule: warmingSchedule,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "imagewarmuppolicy")
 		os.Exit(1)

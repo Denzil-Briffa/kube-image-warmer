@@ -111,6 +111,7 @@ type ImageWarmupRunSummary struct {
 	SucceededCount int32                 `json:"succeededCount"`
 	FailedCount    int32                 `json:"failedCount"`
 	CompletionTime metav1.Time           `json:"completionTime"`
+	NodeUID        string                `json:"nodeUID,omitempty"`
 }
 
 // ImageWarmupPolicyStatus defines the observed state of ImageWarmupPolicy.
@@ -119,6 +120,27 @@ type ImageWarmupPolicyStatus struct {
 	// found during the most recent successful discovery.
 	// +optional
 	DiscoveredImageCount int32 `json:"discoveredImageCount,omitempty"`
+
+	// NodeCoverageInitialized records that existing eligible Nodes were baselined.
+	// +optional
+	NodeCoverageInitialized bool `json:"nodeCoverageInitialized,omitempty"`
+
+	// HandledNodeUIDs identifies Nodes baselined during feature initialization
+	// or covered by a finished warming attempt. It does not imply every pull
+	// succeeded or that the images remain cached.
+	// +optional
+	// +listType=set
+	HandledNodeUIDs []string `json:"handledNodeUIDs,omitempty"`
+
+	// PendingNodeUIDs identifies newly eligible Nodes waiting for warming.
+	// +optional
+	// +listType=set
+	PendingNodeUIDs []string `json:"pendingNodeUIDs,omitempty"`
+
+	// CurrentRunNodeUID identifies the target of an active node-triggered run.
+	// It is empty for initial and scheduled full-cluster runs.
+	// +optional
+	CurrentRunNodeUID string `json:"currentRunNodeUID,omitempty"`
 
 	// CurrentRunID identifies the active warming run.
 	// It remains stable across repeated reconciliations and controller restarts.
@@ -144,6 +166,11 @@ type ImageWarmupPolicyStatus struct {
 	// CurrentRunFailedCount is the number of failed Jobs in the active run.
 	// +optional
 	CurrentRunFailedCount int32 `json:"currentRunFailedCount,omitempty"`
+
+	// NextScheduledRunTime is the persisted next full-cluster cron occurrence.
+	// The cron expression is evaluated using the operator process local timezone.
+	// +optional
+	NextScheduledRunTime *metav1.Time `json:"nextScheduledRunTime,omitempty"`
 
 	// LastFinishedRun stores one bounded summary of the most recently finished run.
 	// +optional

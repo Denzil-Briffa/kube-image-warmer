@@ -19,10 +19,13 @@ package controller
 import (
 	"context"
 	"slices"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	cachev1alpha1 "github.com/Denzil-Briffa/kube-image-warmer/api/v1alpha1"
@@ -34,12 +37,15 @@ import (
 	klabels "k8s.io/apimachinery/pkg/labels"
 
 	"github.com/Denzil-Briffa/kube-image-warmer/internal/discovery"
+	"github.com/Denzil-Briffa/kube-image-warmer/internal/scheduling"
 )
 
 // ImageWarmupPolicyReconciler reconciles a ImageWarmupPolicy object
 type ImageWarmupPolicyReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Schedule scheduling.Schedule
+	Now      func() time.Time
 }
 
 // +kubebuilder:rbac:groups=cache.denzil-briffa.github.io,resources=imagewarmuppolicies,verbs=get;list;watch
@@ -48,7 +54,7 @@ type ImageWarmupPolicyReconciler struct {
 
 // +kubebuilder:rbac:groups=apps,resources=deployments;statefulsets;daemonsets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;list;watch
-// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;patch
 
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
@@ -71,7 +77,24 @@ func (r *ImageWarmupPolicyReconciler) Reconcile(
 	}
 
 	if policy.Spec.Suspend {
-		logger.Info("policy is suspended", "policy", policy.Name)
+		cleanupEnabledCount, cleanupErr :=
+			r.enableFinishedWarmupJobCleanup(
+				ctx,
+				&policy,
+			)
+		if cleanupErr != nil {
+			logger.Error(
+				cleanupErr,
+				"Could not enable cleanup for finished warming Jobs",
+			)
+			return ctrl.Result{}, cleanupErr
+		}
+
+		logger.Info(
+			"Policy is suspended",
+			"policy", policy.Name,
+			"cleanupEnabledWarmupJobs", cleanupEnabledCount,
+		)
 		return ctrl.Result{}, nil
 	}
 
@@ -243,7 +266,7 @@ func (r *ImageWarmupPolicyReconciler) Reconcile(
 
 	imageCount := int32(len(uniqueImages))
 
-	statusChanged := ensureInitialWarmupRunState(&policy)
+	statusChanged := false
 
 	if policy.Status.DiscoveredImageCount != imageCount {
 		policy.Status.DiscoveredImageCount = imageCount
@@ -262,10 +285,10 @@ func (r *ImageWarmupPolicyReconciler) Reconcile(
 
 	imagePullContexts := deduplicateImagePullContexts(resolvedImages)
 
-	warmupSummary, err := r.ensureCurrentWarmupRunJobs(
+	warmupSummary, runStatusChanged, err := r.reconcileWarmupRun(
 		ctx,
 		&policy,
-		nodeSelection.healthyNodes,
+		nodeSelection,
 		imagePullContexts,
 	)
 	if err != nil {
@@ -273,20 +296,28 @@ func (r *ImageWarmupPolicyReconciler) Reconcile(
 		return ctrl.Result{}, err
 	}
 
-	if applyWarmupExecutionSummary(
-		&policy,
-		warmupSummary,
-		metav1.Now(),
-	) {
+	if runStatusChanged {
 		statusChanged = true
 	}
 
-	if statusChanged {
-		err = r.Status().Update(ctx, &policy)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
+	cleanupEnabledCount, err :=
+		r.persistWarmupStatusAndEnableCleanup(
+			ctx,
+			&policy,
+			statusChanged,
+		)
+	if err != nil {
+		logger.Error(
+			err,
+			"Could not persist warming status or enable Job cleanup",
+		)
+		return ctrl.Result{}, err
 	}
+
+	requeueAfter := minimumPositiveDuration(
+		scheduledRunRequeueAfter(&policy, r.currentTime()),
+		nodeRunRequeueAfter(&policy),
+	)
 
 	logger.Info(
 		"Image discovery completed",
@@ -306,9 +337,15 @@ func (r *ImageWarmupPolicyReconciler) Reconcile(
 		"createdWarmupJobs", warmupSummary.createdCount,
 		"existingWarmupJobs", warmupSummary.existingCount,
 		"warmupSkippedReasons", warmupSummary.skippedReasons,
+		"cleanupEnabledWarmupJobs", cleanupEnabledCount,
+		"nextScheduledRunTime", policy.Status.NextScheduledRunTime,
+		"requeueAfter", requeueAfter,
+		"handledNodes", len(policy.Status.HandledNodeUIDs),
+		"pendingNodes", len(policy.Status.PendingNodeUIDs),
+		"currentRunNodeUID", policy.Status.CurrentRunNodeUID,
 	)
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }
 
 func shouldDiscoverWorkload(
@@ -347,6 +384,11 @@ func (r *ImageWarmupPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cachev1alpha1.ImageWarmupPolicy{}).
 		Owns(&batchv1.Job{}).
+		Watches(
+			&corev1.Node{},
+			handler.EnqueueRequestsFromMapFunc(r.mapNodeToPolicies),
+			builder.WithPredicates(nodeWarmupPredicate()),
+		).
 		Named("imagewarmuppolicy").
 		Complete(r)
 }

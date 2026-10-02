@@ -33,11 +33,15 @@ func (r *ImageWarmupPolicyReconciler) ensureWarmupJob(
 	ctx context.Context,
 	policy *cachev1alpha1.ImageWarmupPolicy,
 	runID string,
-	nodeName string,
+	plannedNode *corev1.Node,
 	image discovery.DiscoveredImage,
 ) (warmupJobResult, error) {
+	if plannedNode == nil {
+		return warmupJobResult{skipReason: nodeReasonMissing}, nil
+	}
+
 	targetNode, reason, err :=
-		r.revalidateNodeForWarmup(ctx, nodeName)
+		r.revalidateNodeForWarmup(ctx, plannedNode.Name)
 	if err != nil {
 		return warmupJobResult{}, err
 	}
@@ -46,6 +50,10 @@ func (r *ImageWarmupPolicyReconciler) ensureWarmupJob(
 		return warmupJobResult{
 			skipReason: reason,
 		}, nil
+	}
+
+	if targetNode.UID != plannedNode.UID {
+		return warmupJobResult{skipReason: nodeReasonReplaced}, nil
 	}
 
 	job := buildWarmupJob(
@@ -127,7 +135,7 @@ func (r *ImageWarmupPolicyReconciler) executePendingWarmupTargets(
 			ctx,
 			policy,
 			runID,
-			target.node.Name,
+			target.node,
 			target.image,
 		)
 		if err != nil {
@@ -194,14 +202,12 @@ func (r *ImageWarmupPolicyReconciler) ensureCurrentWarmupRunJobs(
 		)
 	}
 
-	targetCount := 0
+	targetCount := countDesiredWarmupTargets(policy, nodes, images, inventory)
 
-	for _, node := range nodes {
-		if node == nil {
-			continue
-		}
-
-		targetCount += len(images)
+	if policy.Status.CurrentRunTrigger ==
+		cachev1alpha1.ImageWarmupRunTriggerNode &&
+		len(nodes) == 0 && policy.Status.CurrentRunTargetCount > 0 {
+		targetCount = int(policy.Status.CurrentRunTargetCount)
 	}
 
 	pendingTargets := planPendingWarmupTargets(

@@ -139,6 +139,11 @@ func TestSelectHealthyNodes(t *testing.T) {
 		)
 	}
 
+	if len(result.matchedNodes) != result.matchedNodeCount ||
+		len(result.selectedNodes) != result.selectedNodeCount {
+		t.Fatal("Node slices must reflect inclusion and skip selector stages")
+	}
+
 	if result.selectedNodeCount != 2 {
 		t.Errorf(
 			"expected two nodes after NodeSkipSelector, got %d",

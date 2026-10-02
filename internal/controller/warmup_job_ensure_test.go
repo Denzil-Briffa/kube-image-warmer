@@ -88,7 +88,7 @@ func TestEnsureWarmupJobCreatesJobForHealthyNode(t *testing.T) {
 		context.Background(),
 		policy,
 		"initial-run",
-		node.Name,
+		node,
 		image,
 	)
 
@@ -128,7 +128,7 @@ func TestEnsureWarmupJobCreatesJobForHealthyNode(t *testing.T) {
 		context.Background(),
 		policy,
 		"initial-run",
-		node.Name,
+		node,
 		image,
 	)
 	if err != nil {
@@ -228,7 +228,7 @@ func TestEnsureWarmupJobSkipsUnhealthyNode(t *testing.T) {
 		context.Background(),
 		policy,
 		"initial-run",
-		node.Name,
+		node,
 		image,
 	)
 	if err != nil {
@@ -342,7 +342,7 @@ func TestEnsureWarmupJobRejectsUnownedExistingJob(
 		context.Background(),
 		policy,
 		runID,
-		node.Name,
+		node,
 		image,
 	)
 
@@ -431,7 +431,7 @@ func TestEnsureWarmupJobReturnsCreateError(t *testing.T) {
 		context.Background(),
 		policy,
 		"create-error-run",
-		node.Name,
+		node,
 		image,
 	)
 
@@ -615,30 +615,11 @@ func TestEnsureCurrentWarmupRunJobsRespectsFullCapacity(
 		},
 	}
 
-	existingJob := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "existing-active-warmup",
-			Namespace: defaultObjectName,
-			Labels: map[string]string{
-				managedByLabelKey: managedByLabelValue,
-				policyUIDLabelKey: string(policy.UID),
-				runIDLabelKey:     runID,
-			},
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(
-					policy,
-					cachev1alpha1.GroupVersion.WithKind(
-						"ImageWarmupPolicy",
-					),
-				),
-			},
-		},
-	}
-
 	image := discovery.DiscoveredImage{
 		Image:     "example/full-capacity:v1",
 		Namespace: defaultObjectName,
 	}
+	existingJob := buildWarmupJob(policy, node, image, runID)
 
 	reconciler := &ImageWarmupPolicyReconciler{
 		Client: fake.NewClientBuilder().

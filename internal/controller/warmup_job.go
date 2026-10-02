@@ -37,11 +37,6 @@ func buildWarmupJob(
 		activeDeadlineSeconds = *policy.Spec.ActiveDeadlineSeconds
 	}
 
-	ttlSecondsAfterFinished := int32(3600)
-	if policy.Spec.TTLSecondsAfterFinished != nil {
-		ttlSecondsAfterFinished = *policy.Spec.TTLSecondsAfterFinished
-	}
-
 	labels := map[string]string{
 		managedByLabelKey:     managedByLabelValue,
 		policyUIDLabelKey:     string(policy.UID),
@@ -69,9 +64,8 @@ func buildWarmupJob(
 			},
 		},
 		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoffLimit,
-			ActiveDeadlineSeconds:   &activeDeadlineSeconds,
-			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
+			BackoffLimit:          &backoffLimit,
+			ActiveDeadlineSeconds: &activeDeadlineSeconds,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: maps.Clone(labels),

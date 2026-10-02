@@ -19,6 +19,10 @@ func ensureInitialWarmupRunState(
 		return false
 	}
 
+	if policy.Status.NextScheduledRunTime != nil {
+		return false
+	}
+
 	if policy.UID == "" {
 		return false
 	}
@@ -105,6 +109,7 @@ func finishCurrentWarmupRun(
 			SucceededCount: policy.Status.CurrentRunSucceededCount,
 			FailedCount:    policy.Status.CurrentRunFailedCount,
 			CompletionTime: completionTime,
+			NodeUID:        policy.Status.CurrentRunNodeUID,
 		}
 
 	policy.Status.CurrentRunID = ""
@@ -113,6 +118,7 @@ func finishCurrentWarmupRun(
 	policy.Status.CurrentRunActiveCount = 0
 	policy.Status.CurrentRunSucceededCount = 0
 	policy.Status.CurrentRunFailedCount = 0
+	policy.Status.CurrentRunNodeUID = ""
 
 	return true
 }

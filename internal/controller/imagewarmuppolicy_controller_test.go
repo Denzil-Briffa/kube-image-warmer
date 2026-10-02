@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -33,6 +34,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	cachev1alpha1 "github.com/Denzil-Briffa/kube-image-warmer/api/v1alpha1"
+	"github.com/Denzil-Briffa/kube-image-warmer/internal/scheduling"
 )
 
 var _ = Describe("ImageWarmupPolicy Controller", func() {
@@ -478,6 +480,207 @@ var _ = Describe("ImageWarmupPolicy Controller", func() {
 
 			Expect(updatedPolicy.Status.DiscoveredImageCount).
 				To(Equal(int32(1)))
+		})
+		It("should persist and start new-node work before the next cron tick", func() {
+			now := time.Date(2026, time.October, 1, 12, 0, 0, 0, time.UTC)
+			cronSchedule, err := scheduling.Parse(nodeRunYearlySchedule)
+			Expect(err).NotTo(HaveOccurred())
+			controllerReconciler := &ImageWarmupPolicyReconciler{
+				Client: k8sClient, Scheme: k8sClient.Scheme(), Schedule: cronSchedule,
+				Now: func() time.Time { return now },
+			}
+
+			var policy cachev1alpha1.ImageWarmupPolicy
+			Expect(k8sClient.Get(ctx, typeNamespacedName, &policy)).To(Succeed())
+			policy.Spec.NamespaceList = []string{defaultObjectName}
+			policy.Spec.WorkloadSelector = metav1.LabelSelector{
+				MatchLabels: map[string]string{nodeRunLabelKey: nodeRunLabelValue},
+			}
+			policy.Spec.NodeSelector = metav1.LabelSelector{
+				MatchLabels: map[string]string{nodeRunLabelKey: nodeRunLabelValue},
+			}
+			Expect(k8sClient.Update(ctx, &policy)).To(Succeed())
+
+			createDefaultServiceAccount(defaultObjectName)
+			replicas := int32(0)
+			labels := map[string]string{nodeRunLabelKey: nodeRunLabelValue}
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeRunLabelKey, Namespace: defaultObjectName, Labels: labels,
+				},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: &replicas,
+					Selector: &metav1.LabelSelector{MatchLabels: labels},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: labels},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: "node-source", Image: testBusyBoxImage},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, deployment)).To(Succeed())
+			DeferCleanup(func() {
+				Expect(k8sClient.Delete(ctx, deployment)).To(Succeed())
+			})
+
+			_, err = controllerReconciler.Reconcile(
+				ctx, reconcile.Request{NamespacedName: typeNamespacedName},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, typeNamespacedName, &policy)).To(Succeed())
+			Expect(policy.Status.NodeCoverageInitialized).To(BeTrue())
+			Expect(policy.Status.NextScheduledRunTime).NotTo(BeNil())
+			nextCronTime := policy.Status.NextScheduledRunTime.DeepCopy()
+
+			node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{
+				Name: "node-trigger-envtest", Labels: labels,
+			}}
+			Expect(k8sClient.Create(ctx, node)).To(Succeed())
+			DeferCleanup(func() {
+				Expect(k8sClient.Delete(ctx, node)).To(Succeed())
+			})
+			node.Status.Conditions = []corev1.NodeCondition{
+				{Type: corev1.NodeReady, Status: corev1.ConditionFalse},
+				{Type: corev1.NodeDiskPressure, Status: corev1.ConditionFalse},
+			}
+			Expect(k8sClient.Status().Update(ctx, node)).To(Succeed())
+			_, err = controllerReconciler.Reconcile(
+				ctx, reconcile.Request{NamespacedName: typeNamespacedName},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			var jobs batchv1.JobList
+			jobLabels := client.MatchingLabels{policyUIDLabelKey: string(policy.UID)}
+			Expect(k8sClient.List(ctx, &jobs, jobLabels)).To(Succeed())
+			Expect(jobs.Items).To(BeEmpty())
+
+			node.Status.Conditions[0].Status = corev1.ConditionTrue
+			Expect(k8sClient.Status().Update(ctx, node)).To(Succeed())
+			_, err = controllerReconciler.Reconcile(
+				ctx, reconcile.Request{NamespacedName: typeNamespacedName},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, typeNamespacedName, &policy)).To(Succeed())
+			Expect(policy.Status.CurrentRunTrigger).To(Equal(
+				cachev1alpha1.ImageWarmupRunTriggerNode,
+			))
+			Expect(policy.Status.CurrentRunNodeUID).To(Equal(string(node.UID)))
+			Expect(policy.Status.CurrentRunID).To(Equal(nodeWarmupRunPrefix + string(node.UID)))
+			Expect(policy.Status.NextScheduledRunTime.Time).To(Equal(nextCronTime.Time))
+			Expect(now.Before(nextCronTime.Time)).To(BeTrue())
+			Expect(k8sClient.List(ctx, &jobs, jobLabels)).To(Succeed())
+			Expect(jobs.Items).To(HaveLen(1))
+			createdJob := jobs.Items[0].DeepCopy()
+			DeferCleanup(func() {
+				Expect(k8sClient.Delete(ctx, createdJob)).To(Succeed())
+			})
+			Expect(createdJob.Labels[targetNodeUIDLabelKey]).To(Equal(string(node.UID)))
+
+			_, err = controllerReconciler.Reconcile(
+				ctx, reconcile.Request{NamespacedName: typeNamespacedName},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.List(ctx, &jobs, jobLabels)).To(Succeed())
+			Expect(jobs.Items).To(HaveLen(1))
+		})
+
+		It("should start one due scheduled run and advance the schedule", func() {
+			operatorLocation := time.FixedZone(
+				testOperatorLocationName,
+				2*60*60,
+			)
+			now := time.Date(
+				2026, time.September, 30, 15, 2, 30, 0,
+				operatorLocation,
+			)
+			cronSchedule, err := scheduling.Parse(
+				testFiveMinuteSchedule,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			controllerReconciler := &ImageWarmupPolicyReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				Schedule: cronSchedule,
+				Now: func() time.Time {
+					return now
+				},
+			}
+
+			firstResult, err := controllerReconciler.Reconcile(
+				ctx,
+				reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(firstResult.RequeueAfter).To(Equal(
+				2*time.Minute + 30*time.Second,
+			))
+
+			var initializedPolicy cachev1alpha1.ImageWarmupPolicy
+			Expect(k8sClient.Get(
+				ctx,
+				typeNamespacedName,
+				&initializedPolicy,
+			)).To(Succeed())
+			Expect(initializedPolicy.Status.NextScheduledRunTime).
+				NotTo(BeNil())
+
+			dueTime := initializedPolicy.Status.NextScheduledRunTime.Time
+			now = dueTime.In(operatorLocation).Add(time.Minute)
+
+			secondResult, err := controllerReconciler.Reconcile(
+				ctx,
+				reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(secondResult.RequeueAfter).To(Equal(4 * time.Minute))
+
+			var scheduledPolicy cachev1alpha1.ImageWarmupPolicy
+			Expect(k8sClient.Get(
+				ctx,
+				typeNamespacedName,
+				&scheduledPolicy,
+			)).To(Succeed())
+			Expect(scheduledPolicy.Status.CurrentRunID).To(BeEmpty())
+			Expect(scheduledPolicy.Status.LastFinishedRun).NotTo(BeNil())
+			Expect(scheduledPolicy.Status.LastFinishedRun.Trigger).To(Equal(
+				cachev1alpha1.ImageWarmupRunTriggerScheduled,
+			))
+			Expect(scheduledPolicy.Status.LastFinishedRun.ID).To(Equal(
+				scheduledWarmupRunID(dueTime),
+			))
+			Expect(scheduledPolicy.Status.NextScheduledRunTime).NotTo(BeNil())
+
+			nextScheduledRunTime :=
+				*scheduledPolicy.Status.NextScheduledRunTime
+
+			_, err = controllerReconciler.Reconcile(
+				ctx,
+				reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			var repeatedPolicy cachev1alpha1.ImageWarmupPolicy
+			Expect(k8sClient.Get(
+				ctx,
+				typeNamespacedName,
+				&repeatedPolicy,
+			)).To(Succeed())
+			Expect(repeatedPolicy.Status.LastFinishedRun.ID).To(Equal(
+				scheduledWarmupRunID(dueTime),
+			))
+			Expect(repeatedPolicy.Status.NextScheduledRunTime.Time).To(Equal(
+				nextScheduledRunTime.Time,
+			))
 		})
 	})
 })

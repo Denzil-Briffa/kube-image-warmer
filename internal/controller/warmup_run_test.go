@@ -97,6 +97,34 @@ func TestEnsureInitialWarmupRunStatePreservesExistingRun(
 	}
 }
 
+func TestEnsureInitialWarmupRunStateDoesNotRestartAfterScheduling(
+	t *testing.T,
+) {
+	nextScheduledRunTime := metav1.Now()
+	policy := &cachev1alpha1.ImageWarmupPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			UID: types.UID("scheduled-policy-uid"),
+		},
+		Status: cachev1alpha1.ImageWarmupPolicyStatus{
+			NextScheduledRunTime: &nextScheduledRunTime,
+			LastFinishedRun: &cachev1alpha1.ImageWarmupRunSummary{
+				ID:      "scheduled-finished-run",
+				Trigger: cachev1alpha1.ImageWarmupRunTriggerScheduled,
+			},
+		},
+	}
+
+	if ensureInitialWarmupRunState(policy) {
+		t.Error("expected persisted schedule state to prevent another initial run")
+	}
+
+	if policy.Status.CurrentRunID != "" {
+		t.Errorf(
+			"expected no current run, got %q",
+			policy.Status.CurrentRunID,
+		)
+	}
+}
 func TestEnsureInitialWarmupRunStateHandlesNilPolicy(
 	t *testing.T,
 ) {

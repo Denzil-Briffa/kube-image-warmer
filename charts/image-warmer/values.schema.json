@@ -3,6 +3,11 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "global": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Reserved Helm global values propagated by parent charts; operator configuration uses its explicit chart values."
+    },
     "nameOverride": {
       "type": "string"
     },

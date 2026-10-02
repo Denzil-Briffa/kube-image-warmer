@@ -1,0 +1,8 @@
+The controller is installed as {{ include "image-warmer.fullname" . }} in {{ .Release.Namespace }}.
+The required cron schedule is {{ .Values.operator.schedule | quote }} and uses the operator process local timezone.
+{{ if .Values.policy.enabled }}
+The cluster-wide ImageWarmupPolicy is {{ include "image-warmer.policyName" . }}.
+Policy settings come from policy.spec in the values file.
+{{ end }}
+Use a new image/chart version for upgrades. Your deployment system must synchronize packaged CRDs before Helm upgrades; Helm does not update existing CRDs.
+Helm uninstall retains CRDs. Removing CRDs separately would remove all policies and their status.

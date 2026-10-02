@@ -1,0 +1,29 @@
+name: Helm chart checks
+on:
+  pull_request:
+    paths:
+      - "charts/**"
+      - "hack/*chart*"
+      - "api/**"
+      - "internal/controller/**"
+      - "config/**"
+      - "Makefile"
+      - ".github/workflows/helm.yml"
+      - ".github/workflows/release.yml"
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417
+        with:
+          go-version-file: go.mod
+      - uses: Azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.19.0
+      - name: Generate chart inputs and validate values/templates
+        run: make helm-lint SCHEDULE='0 * * * *'

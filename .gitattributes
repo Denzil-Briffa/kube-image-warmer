@@ -1,0 +1,4 @@
+hack/prepare-chart.sh text eol=lf
+hack/check-chart.sh text eol=lf
+Makefile text eol=lf
+Dockerfile text eol=lf

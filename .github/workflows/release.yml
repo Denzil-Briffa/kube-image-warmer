@@ -1,0 +1,120 @@
+name: Release image and Helm chart
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      image: ${{ steps.release.outputs.image }}
+      chart_registry: ${{ steps.release.outputs.chart_registry }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417
+        with:
+          go-version-file: go.mod
+      - uses: Azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.19.0
+      - name: Resolve release references
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          CONFIGURED_IMAGE: ${{ vars.IMAGE_REPOSITORY }}
+          CONFIGURED_CHART_REGISTRY: ${{ vars.CHART_REGISTRY }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "Use a vMAJOR.MINOR.PATCH release tag"; exit 1; }
+          image="${CONFIGURED_IMAGE:-ghcr.io/${REPOSITORY,,}}"
+          chart_registry="${CONFIGURED_CHART_REGISTRY:-oci://ghcr.io/${OWNER,,}/charts}"
+          [[ "$chart_registry" == oci://* ]] || { echo "CHART_REGISTRY must be an OCI parent reference"; exit 1; }
+          printf 'version=%s\nimage=%s\nchart_registry=%s\n' "$version" "$image" "$chart_registry" >> "$GITHUB_OUTPUT"
+      - name: Validate source and chart
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          SCHEDULE: "0 * * * *"
+        run: |
+          make test
+          make lint
+          make helm-package
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: helm-package
+          path: dist/image-warmer-${{ steps.release.outputs.version }}.tgz
+          if-no-files-found: error
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: helm-package
+          path: dist
+      - uses: Azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.19.0
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: Resolve registry credentials
+        id: registry
+        env:
+          IMAGE: ${{ needs.validate.outputs.image }}
+          CHART_REGISTRY: ${{ needs.validate.outputs.chart_registry }}
+          GH_USER: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_USERNAME: ${{ secrets.PUBLISH_USERNAME }}
+          PUBLISH_PASSWORD: ${{ secrets.PUBLISH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          image_host="${IMAGE%%/*}"
+          chart_path="${CHART_REGISTRY#oci://}"
+          chart_host="${chart_path%%/*}"
+          [[ "$image_host" == "$chart_host" ]] || { echo "Image and chart publishing must use the same registry host"; exit 1; }
+          if [[ "$image_host" == ghcr.io && -z "$PUBLISH_PASSWORD" ]]; then
+            username="$GH_USER"; password="$GH_TOKEN"
+          else
+            [[ -n "$PUBLISH_USERNAME" && -n "$PUBLISH_PASSWORD" ]] || { echo "Set PUBLISH_USERNAME and PUBLISH_PASSWORD for the registry"; exit 1; }
+            username="$PUBLISH_USERNAME"; password="$PUBLISH_PASSWORD"
+          fi
+          echo "::add-mask::$password"
+          printf 'host=%s\nusername=%s\npassword=%s\n' "$image_host" "$username" "$password" >> "$GITHUB_OUTPUT"
+          printf '%s' "$password" | helm registry login "$chart_host" --username "$username" --password-stdin
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ${{ steps.registry.outputs.host }}
+          username: ${{ steps.registry.outputs.username }}
+          password: ${{ steps.registry.outputs.password }}
+      - name: Build and publish operator
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ needs.validate.outputs.image }}:${{ needs.validate.outputs.version }}
+          build-args: |
+            VERSION=${{ needs.validate.outputs.version }}
+            REVISION=${{ github.sha }}
+            SOURCE_URL=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Publish chart
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          CHART_REGISTRY: ${{ needs.validate.outputs.chart_registry }}
+        run: helm push "dist/image-warmer-$VERSION.tgz" "$CHART_REGISTRY"

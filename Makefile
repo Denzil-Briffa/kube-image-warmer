@@ -261,3 +261,27 @@ endef
 define gomodver
 $(shell go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}' $(1) 2>/dev/null)
 endef
+
+##@ Helm release packaging
+
+HELM ?= helm
+VERSION ?= 0.1.0
+CHART_REGISTRY ?= oci://ghcr.io/denzil-briffa/charts
+export SCHEDULE VERSION CHART_REGISTRY
+
+.PHONY: helm-prepare
+helm-prepare: manifests ## Copy generated CRDs and RBAC into the release chart.
+	bash hack/prepare-chart.sh
+
+.PHONY: helm-lint
+helm-lint: helm-prepare ## Validate chart rendering and invalid values; requires SCHEDULE.
+	bash hack/check-chart.sh "$(HELM)"
+
+.PHONY: helm-package
+helm-package: helm-lint ## Package the chart with VERSION and matching appVersion.
+	mkdir -p dist
+	"$(HELM)" package charts/image-warmer --version "$$VERSION" --app-version "$$VERSION" --destination dist
+
+.PHONY: helm-push
+helm-push: helm-package ## Publish the packaged chart to CHART_REGISTRY after registry login.
+	"$(HELM)" push "dist/image-warmer-$$VERSION.tgz" "$$CHART_REGISTRY"

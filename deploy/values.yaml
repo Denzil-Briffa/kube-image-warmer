@@ -1,0 +1,11 @@
+operator:
+  schedule: ""
+
+policy:
+  enabled: true
+  spec:
+    suspend: false
+    backoffLimit: 0
+    activeDeadlineSeconds: 300
+    ttlSecondsAfterFinished: 3600
+    maxConcurrentJobs: 4

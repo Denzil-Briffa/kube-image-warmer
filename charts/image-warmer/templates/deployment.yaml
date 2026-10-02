@@ -1,0 +1,102 @@
+{{- $schedule := required "operator.schedule is required" (.Values.operator.schedule | trim) -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "image-warmer.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "image-warmer.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "image-warmer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "image-warmer.selectorLabels" . | nindent 8 }}
+      {{- with .Values.operator.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "image-warmer.serviceAccountName" . }}
+      {{- if or .Values.imagePullSecrets .Values.registryCredentials.create }}
+      imagePullSecrets:
+        {{- with .Values.imagePullSecrets }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.registryCredentials.create }}
+        - name: {{ include "image-warmer.fullname" . }}-registry
+        {{- end }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: manager
+          image: {{ include "image-warmer.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/manager"]
+          args:
+            - {{ printf "--schedule=%s" $schedule | quote }}
+            - {{ printf "--leader-elect=%t" .Values.operator.leaderElection | quote }}
+            - "--health-probe-bind-address=:8081"
+            {{- if .Values.operator.metrics.enabled }}
+            - "--metrics-bind-address=:8443"
+            - "--metrics-secure=true"
+            {{- else }}
+            - "--metrics-bind-address=0"
+            {{- end }}
+          {{- with .Values.operator.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: health
+              containerPort: 8081
+            {{- if .Values.operator.metrics.enabled }}
+            - name: metrics
+              containerPort: 8443
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.operator.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: temporary
+              mountPath: /tmp
+      volumes:
+        - name: temporary
+          emptyDir: {}
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.operator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

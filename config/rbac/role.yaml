@@ -10,16 +10,11 @@ rules:
   - namespaces
   - nodes
   - pods
+  - serviceaccounts
   verbs:
   - get
   - list
   - watch
-- apiGroups:
-  - ""
-  resources:
-  - serviceaccounts
-  verbs:
-  - get
 - apiGroups:
   - apps
   resources:

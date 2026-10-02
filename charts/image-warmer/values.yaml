@@ -1,0 +1,56 @@
+# Set operator.schedule when installing. The chart has no fixed cron default.
+nameOverride: ""
+fullnameOverride: ""
+replicaCount: 1
+
+image:
+  repository: ghcr.io/denzil-briffa/kube-image-warmer
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+registryCredentials:
+  create: false
+  dockerconfigjson: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+operator:
+  schedule: ""
+  leaderElection: true
+  # These resources apply to the controller, not its warming Jobs.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 128Mi
+  env: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  metrics:
+    enabled: false
+
+policy:
+  enabled: true
+  name: ""
+  spec:
+    suspend: false
+    backoffLimit: 0
+    activeDeadlineSeconds: 300
+    ttlSecondsAfterFinished: 3600
+    maxConcurrentJobs: 4
+    namespaceSelector: {}
+    namespaceList: []
+    namespaceSkipList: []
+    workloadSelector: {}
+    workloadSkipSelector: {}
+    nodeSelector: {}
+    nodeSkipSelector: {}

@@ -1,0 +1,80 @@
+{{- $managerRole := required "Run make helm-prepare before rendering: generated manager RBAC is missing" (.Files.Get "files/manager-role.yaml") | fromYaml }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "image-warmer.clusterName" . }}
+  labels:
+    {{- include "image-warmer.labels" . | nindent 4 }}
+rules:
+  {{- toYaml $managerRole.rules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "image-warmer.clusterName" . }}
+  labels:
+    {{- include "image-warmer.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "image-warmer.clusterName" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "image-warmer.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- if .Values.operator.leaderElection }}
+{{- $leaderRole := required "Run make helm-prepare: generated leader election RBAC is missing" (.Files.Get "files/leader-election-role.yaml") | fromYaml }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "image-warmer.fullname" . }}-leader
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "image-warmer.labels" . | nindent 4 }}
+rules:
+  {{- toYaml $leaderRole.rules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "image-warmer.fullname" . }}-leader
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "image-warmer.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "image-warmer.fullname" . }}-leader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "image-warmer.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if .Values.operator.metrics.enabled }}
+{{- $metricsRole := required "Run make helm-prepare: generated metrics RBAC is missing" (.Files.Get "files/metrics-auth-role.yaml") | fromYaml }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "image-warmer.clusterName" . }}-metrics
+  labels:
+    {{- include "image-warmer.labels" . | nindent 4 }}
+rules:
+  {{- toYaml $metricsRole.rules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "image-warmer.clusterName" . }}-metrics
+  labels:
+    {{- include "image-warmer.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "image-warmer.clusterName" . }}-metrics
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "image-warmer.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

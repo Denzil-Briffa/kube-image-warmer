@@ -1,0 +1,10 @@
+{{- if .Values.policy.enabled }}
+apiVersion: cache.denzil-briffa.github.io/v1alpha1
+kind: ImageWarmupPolicy
+metadata:
+  name: {{ include "image-warmer.policyName" . }}
+  labels:
+    {{- include "image-warmer.labels" . | nindent 4 }}
+spec:
+  {{- toYaml .Values.policy.spec | nindent 2 }}
+{{- end }}

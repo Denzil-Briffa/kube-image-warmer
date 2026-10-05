@@ -21,6 +21,8 @@ serviceAccount:
 
 operator:
   schedule: ""
+  # Empty value will use the controller image, including its tag/digest. (keep empty unless required otherwise)
+  helperImage: ""
   leaderElection: true
   # These resources apply to the controller, not its warming Jobs.
   resources:

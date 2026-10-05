@@ -1,6 +1,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # SCHEDULE is the required five-field full-cluster warming schedule for make run.
+HELPER_IMAGE ?= $(IMG)
 SCHEDULE ?=
 # YEAR defines the year value used for substituting the YEAR placeholder in the boilerplate header.
 YEAR ?= $(shell date +%Y)
@@ -116,7 +117,7 @@ build: manifests generate fmt vet ## Build manager binary.
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go --schedule="$(SCHEDULE)"
+	go run ./cmd/main.go --schedule="$(SCHEDULE)" --warmup-helper-image="$(HELPER_IMAGE)"
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
@@ -265,7 +266,7 @@ endef
 ##@ Helm release packaging
 
 HELM ?= helm
-VERSION ?= 0.1.1
+VERSION ?= 0.1.2
 CHART_REGISTRY ?= oci://ghcr.io/denzil-briffa/charts
 export SCHEDULE VERSION CHART_REGISTRY
 

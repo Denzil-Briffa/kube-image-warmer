@@ -103,6 +103,10 @@
           "type": "string",
           "pattern": "^(\\S+[ \\t]+){4}\\S+$"
         },
+        "helperImage": {
+          "type": "string",
+          "pattern": "^$|^\\S+$"
+        },
         "leaderElection": {
           "type": "boolean"
         },

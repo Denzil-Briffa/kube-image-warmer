@@ -37,6 +37,7 @@ func TestBuildWarmupJobSetsIdentity(t *testing.T) {
 		targetNode,
 		image,
 		runID,
+		testWarmupHelperImage,
 	)
 
 	wantName := warmupJobName(
@@ -86,6 +87,7 @@ func TestBuildWarmupJobConfiguresContainer(t *testing.T) {
 		targetNode,
 		image,
 		"warmup-test",
+		testWarmupHelperImage,
 	)
 
 	if len(job.Spec.Template.Spec.Containers) != 1 {
@@ -113,7 +115,7 @@ func TestBuildWarmupJobConfiguresContainer(t *testing.T) {
 		)
 	}
 
-	wantCommand := []string{"/bin/sh", "-c", "exit 0"}
+	wantCommand := []string{warmupHelperPath}
 
 	if !slices.Equal(container.Command, wantCommand) {
 		t.Errorf(
@@ -155,6 +157,7 @@ func TestBuildWarmupJobTargetsNode(t *testing.T) {
 		targetNode,
 		image,
 		"warmup-test",
+		testWarmupHelperImage,
 	)
 
 	affinity := job.Spec.Template.Spec.Affinity
@@ -243,6 +246,7 @@ func TestBuildWarmupJobConfiguresPullCredentials(t *testing.T) {
 		targetNode,
 		image,
 		"credential-warmup",
+		testWarmupHelperImage,
 	)
 
 	automountToken :=
@@ -295,6 +299,7 @@ func TestBuildWarmupJobConfiguresLifecycleLimits(t *testing.T) {
 		targetNode,
 		image,
 		"lifecycle-warmup",
+		testWarmupHelperImage,
 	)
 
 	if job.Spec.BackoffLimit == nil {
@@ -359,6 +364,7 @@ func TestBuildWarmupJobUsesPolicyLifecycleSettings(t *testing.T) {
 		targetNode,
 		image,
 		"custom-lifecycle-warmup",
+		testWarmupHelperImage,
 	)
 
 	if job.Spec.BackoffLimit == nil {
@@ -420,6 +426,7 @@ func TestBuildWarmupJobConfiguresOwnershipAndLabels(t *testing.T) {
 		targetNode,
 		image,
 		runID,
+		testWarmupHelperImage,
 	)
 
 	if !metav1.IsControlledBy(job, policy) {

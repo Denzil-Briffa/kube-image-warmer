@@ -46,6 +46,7 @@ type ImageWarmupPolicyReconciler struct {
 	Scheme   *runtime.Scheme
 	Schedule scheduling.Schedule
 	Now      func() time.Time
+	WarmupHelperImage string
 }
 
 // +kubebuilder:rbac:groups=cache.denzil-briffa.github.io,resources=imagewarmuppolicies,verbs=get;list;watch

@@ -89,6 +89,7 @@ func TestMapNodeToPolicies(t *testing.T) {
 		{ObjectMeta: metav1.ObjectMeta{Name: "node-watch-second"}},
 	}
 	reconciler := &ImageWarmupPolicyReconciler{
+		WarmupHelperImage: testWarmupHelperImage,
 		Client: fake.NewClientBuilder().WithScheme(scheme).
 			WithObjects(policies[0], policies[1]).Build(),
 	}

@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -57,6 +58,7 @@ func init() {
 func main() {
 	var metricsAddr string
 	var scheduleExpression string
+	var warmupHelperImage string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
 	var webhookPort int
@@ -65,6 +67,8 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
+	flag.StringVar(&warmupHelperImage, "warmup-helper-image", "",
+		"Required image containing /warmup-helper, normally the operator image.")
 	flag.StringVar(&scheduleExpression, "schedule", "",
 		"Required five-field cron schedule for full-cluster warming. "+
 			"The operator evaluates it using its local clock and timezone.")
@@ -102,6 +106,12 @@ func main() {
 			"Invalid warming schedule",
 			"schedule", scheduleExpression,
 		)
+		os.Exit(1)
+	}
+
+	warmupHelperImage = strings.TrimSpace(warmupHelperImage)
+	if warmupHelperImage == "" {
+		setupLog.Error(nil, "Warming helper image is required", "flag", "--warmup-helper-image")
 		os.Exit(1)
 	}
 
@@ -198,9 +208,10 @@ func main() {
 	}
 
 	if err := (&controller.ImageWarmupPolicyReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Schedule: warmingSchedule,
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Schedule:          warmingSchedule,
+		WarmupHelperImage: warmupHelperImage,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "imagewarmuppolicy")
 		os.Exit(1)

@@ -62,6 +62,12 @@ var _ = BeforeSuite(func() {
 	err = utils.LoadImageToKindClusterWithName(managerImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager image into Kind")
 
+	By("building and loading the shell-less warming fixture")
+	cmd = exec.Command("docker", "build", "--target", "warmup-test", "-t", shellLessImage, ".")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build scratch fixture")
+	ExpectWithOffset(1, utils.LoadImageToKindClusterWithName(shellLessImage)).To(Succeed())
+
 	configureKubectlKubeRC()
 	setupCertManager()
 })

@@ -160,8 +160,9 @@ var _ = Describe("ImageWarmupPolicy Controller", func() {
 			}
 
 			controllerReconciler := &ImageWarmupPolicyReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				WarmupHelperImage: testWarmupHelperImage,
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -215,8 +216,9 @@ var _ = Describe("ImageWarmupPolicy Controller", func() {
 			Expect(k8sClient.Status().Update(ctx, &policy)).To(Succeed())
 
 			controllerReconciler := &ImageWarmupPolicyReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				WarmupHelperImage: testWarmupHelperImage,
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -339,8 +341,9 @@ var _ = Describe("ImageWarmupPolicy Controller", func() {
 			Expect(k8sClient.Update(ctx, &policy)).To(Succeed())
 
 			controllerReconciler := &ImageWarmupPolicyReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				WarmupHelperImage: testWarmupHelperImage,
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -458,8 +461,9 @@ var _ = Describe("ImageWarmupPolicy Controller", func() {
 			Expect(k8sClient.Update(ctx, &policy)).To(Succeed())
 
 			controllerReconciler := &ImageWarmupPolicyReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				WarmupHelperImage: testWarmupHelperImage,
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
 			}
 
 			_, err := controllerReconciler.Reconcile(
@@ -486,7 +490,8 @@ var _ = Describe("ImageWarmupPolicy Controller", func() {
 			cronSchedule, err := scheduling.Parse(nodeRunYearlySchedule)
 			Expect(err).NotTo(HaveOccurred())
 			controllerReconciler := &ImageWarmupPolicyReconciler{
-				Client: k8sClient, Scheme: k8sClient.Scheme(), Schedule: cronSchedule,
+				WarmupHelperImage: testWarmupHelperImage,
+				Client:            k8sClient, Scheme: k8sClient.Scheme(), Schedule: cronSchedule,
 				Now: func() time.Time { return now },
 			}
 
@@ -602,9 +607,10 @@ var _ = Describe("ImageWarmupPolicy Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			controllerReconciler := &ImageWarmupPolicyReconciler{
-				Client:   k8sClient,
-				Scheme:   k8sClient.Scheme(),
-				Schedule: cronSchedule,
+				WarmupHelperImage: testWarmupHelperImage,
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
+				Schedule:          cronSchedule,
 				Now: func() time.Time {
 					return now
 				},

@@ -78,6 +78,7 @@ func TestEnsureWarmupJobCreatesJobForHealthyNode(t *testing.T) {
 	}
 
 	reconciler := &ImageWarmupPolicyReconciler{
+		WarmupHelperImage: testWarmupHelperImage,
 		Client: fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithObjects(node).
@@ -123,6 +124,10 @@ func TestEnsureWarmupJobCreatesJobForHealthyNode(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatalf("get created Job: %v", err)
+	}
+	if len(storedJob.Spec.Template.Spec.InitContainers) != 1 ||
+		storedJob.Spec.Template.Spec.InitContainers[0].Image != testWarmupHelperImage {
+		t.Fatal("configured helper image was not propagated to the created Job")
 	}
 	secondResult, err := reconciler.ensureWarmupJob(
 		context.Background(),
@@ -218,6 +223,7 @@ func TestEnsureWarmupJobSkipsUnhealthyNode(t *testing.T) {
 	}
 
 	reconciler := &ImageWarmupPolicyReconciler{
+		WarmupHelperImage: testWarmupHelperImage,
 		Client: fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithObjects(node).
@@ -332,6 +338,7 @@ func TestEnsureWarmupJobRejectsUnownedExistingJob(
 	}
 
 	reconciler := &ImageWarmupPolicyReconciler{
+		WarmupHelperImage: testWarmupHelperImage,
 		Client: fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithObjects(node, existingJob).
@@ -421,6 +428,7 @@ func TestEnsureWarmupJobReturnsCreateError(t *testing.T) {
 	createError := errors.New("Job creation unavailable")
 
 	reconciler := &ImageWarmupPolicyReconciler{
+		WarmupHelperImage: testWarmupHelperImage,
 		Client: &warmupJobCreateErrorClient{
 			Client:      baseClient,
 			createError: createError,
@@ -502,6 +510,7 @@ func TestExecutePendingWarmupTargetsCreatesJobs(t *testing.T) {
 	}
 
 	reconciler := &ImageWarmupPolicyReconciler{
+		WarmupHelperImage: testWarmupHelperImage,
 		Client: fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithObjects(node).
@@ -619,9 +628,10 @@ func TestEnsureCurrentWarmupRunJobsRespectsFullCapacity(
 		Image:     "example/full-capacity:v1",
 		Namespace: defaultObjectName,
 	}
-	existingJob := buildWarmupJob(policy, node, image, runID)
+	existingJob := buildWarmupJob(policy, node, image, runID, testWarmupHelperImage)
 
 	reconciler := &ImageWarmupPolicyReconciler{
+		WarmupHelperImage: testWarmupHelperImage,
 		Client: fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithObjects(node, existingJob).

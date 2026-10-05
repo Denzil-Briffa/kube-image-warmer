@@ -123,8 +123,9 @@ func TestEnableFinishedWarmupJobCleanup(t *testing.T) {
 		Build()
 
 	reconciler := &ImageWarmupPolicyReconciler{
-		Client: fakeClient,
-		Scheme: scheme,
+		WarmupHelperImage: testWarmupHelperImage,
+		Client:            fakeClient,
+		Scheme:            scheme,
 	}
 
 	patchedCount, err := reconciler.enableFinishedWarmupJobCleanup(

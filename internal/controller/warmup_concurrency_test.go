@@ -304,6 +304,7 @@ func TestActiveWarmupJobCountListsManagedPolicyJobs(
 	}
 
 	reconciler := &ImageWarmupPolicyReconciler{
+		WarmupHelperImage: testWarmupHelperImage,
 		Client: fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithObjects(

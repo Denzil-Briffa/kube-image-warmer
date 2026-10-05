@@ -14,6 +14,7 @@ The chart installs the controller, ServiceAccount, RBAC, CRD, and optional polic
 - Operator image: `ghcr.io/denzil-briffa/kube-image-warmer:<version>`
 - Helm chart: `oci://ghcr.io/denzil-briffa/charts/image-warmer`
 - [Deployment configuration and automated release guide](docs/deployment.md)
+- [Shell-independent warming and verification](docs/warming.md)
 - [Chart defaults](charts/image-warmer/values.yaml)
 - [Example deployment values](deploy/values.yaml)
 
@@ -31,7 +32,7 @@ make fmt manifests generate
 make lint-fix
 make test
 make helm-lint SCHEDULE='0 * * * *'
-make helm-package VERSION=0.1.0 SCHEDULE='0 * * * *'
+make helm-package VERSION=0.1.2 SCHEDULE='0 * * * *'
 ```
 
 The validation schedule is only used while checking the chart. Packaged defaults

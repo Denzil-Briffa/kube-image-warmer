@@ -99,7 +99,8 @@ func newNodeTriggerTestFixture(t *testing.T, twoImages bool) *nodeTriggerTestFix
 			}},
 		).Build()
 	fixture.reconciler = &ImageWarmupPolicyReconciler{
-		Client: fakeClient, Scheme: scheme, Schedule: cronSchedule,
+		WarmupHelperImage: testWarmupHelperImage,
+		Client:            fakeClient, Scheme: scheme, Schedule: cronSchedule,
 		Now: func() time.Time { return fixture.now },
 	}
 	return fixture
@@ -186,7 +187,8 @@ func TestReconcileNodeWarmupBeforeCronSurvivesRestartAndCleanup(t *testing.T) {
 	// A new reconciler uses only persisted state and existing Jobs.
 	previous := fixture.reconciler
 	fixture.reconciler = &ImageWarmupPolicyReconciler{
-		Client: previous.Client, Scheme: previous.Scheme, Schedule: previous.Schedule,
+		WarmupHelperImage: testWarmupHelperImage,
+		Client:            previous.Client, Scheme: previous.Scheme, Schedule: previous.Schedule,
 		Now: previous.Now,
 	}
 	fixture.reconcile(t)

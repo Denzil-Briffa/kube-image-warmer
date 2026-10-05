@@ -51,6 +51,7 @@ func TestRevalidateNodeForWarmupReturnsHealthyNode(t *testing.T) {
 	}
 
 	reconciler := &ImageWarmupPolicyReconciler{
+		WarmupHelperImage: testWarmupHelperImage,
 		Client: fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithObjects(node).
@@ -150,7 +151,8 @@ func TestRevalidateNodeForWarmupSkipsUnavailableNodes(
 			}
 
 			reconciler := &ImageWarmupPolicyReconciler{
-				Client: clientBuilder.Build(),
+				WarmupHelperImage: testWarmupHelperImage,
+				Client:            clientBuilder.Build(),
 			}
 
 			gotNode, reason, err :=
@@ -198,6 +200,7 @@ func TestRevalidateNodeForWarmupReturnsAPIError(t *testing.T) {
 		Build()
 
 	reconciler := &ImageWarmupPolicyReconciler{
+		WarmupHelperImage: testWarmupHelperImage,
 		Client: &nodeRevalidationErrorClient{
 			Client:   baseClient,
 			getError: getError,

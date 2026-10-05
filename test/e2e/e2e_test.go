@@ -76,7 +76,11 @@ var _ = Describe("Manager", Ordered, func() {
 		cmd = exec.Command("kubectl", "patch", "deployment",
 			"kube-image-warmer-controller-manager", "-n", namespace,
 			"--type=json", "-p",
-			`[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--schedule=0 0 * * *"}]`,
+			fmt.Sprintf(
+				`[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--schedule=0 0 * * *"},`+
+					`{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--warmup-helper-image=%s"}]`,
+				managerImage,
+			),
 		)
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to configure the e2e warming schedule")
@@ -187,6 +191,9 @@ var _ = Describe("Manager", Ordered, func() {
 			}
 			Eventually(verifyControllerUp).Should(Succeed())
 		})
+
+		It("should warm shell-containing and scratch images without starting their applications",
+			verifyShellIndependentWarming)
 
 		It("should ensure the metrics endpoint is serving metrics", func() {
 			By("creating a ClusterRoleBinding for the service account to allow access to metrics")

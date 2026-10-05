@@ -43,9 +43,10 @@ import (
 // ImageWarmupPolicyReconciler reconciles a ImageWarmupPolicy object
 type ImageWarmupPolicyReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Schedule scheduling.Schedule
-	Now      func() time.Time
+	Scheme            *runtime.Scheme
+	Schedule          scheduling.Schedule
+	Now               func() time.Time
+	WarmupHelperImage string
 }
 
 // +kubebuilder:rbac:groups=cache.denzil-briffa.github.io,resources=imagewarmuppolicies,verbs=get;list;watch

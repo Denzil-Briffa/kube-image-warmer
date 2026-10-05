@@ -43,6 +43,7 @@ spec:
           command: ["/manager"]
           args:
             - {{ printf "--schedule=%s" $schedule | quote }}
+            - {{ printf "--warmup-helper-image=%s" (default (include "image-warmer.image" .) .Values.operator.helperImage) | quote }}
             - {{ printf "--leader-elect=%t" .Values.operator.leaderElection | quote }}
             - "--health-probe-bind-address=:8081"
             {{- if .Values.operator.metrics.enabled }}

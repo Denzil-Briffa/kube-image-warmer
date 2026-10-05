@@ -99,8 +99,9 @@ func TestSelectHealthyNodes(t *testing.T) {
 		Build()
 
 	reconciler := &ImageWarmupPolicyReconciler{
-		Client: fakeClient,
-		Scheme: scheme,
+		WarmupHelperImage: testWarmupHelperImage,
+		Client:            fakeClient,
+		Scheme:            scheme,
 	}
 
 	policy := &cachev1alpha1.ImageWarmupPolicy{

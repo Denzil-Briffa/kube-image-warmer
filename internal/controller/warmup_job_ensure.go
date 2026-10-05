@@ -56,11 +56,16 @@ func (r *ImageWarmupPolicyReconciler) ensureWarmupJob(
 		return warmupJobResult{skipReason: nodeReasonReplaced}, nil
 	}
 
+	if r.WarmupHelperImage == "" {
+		return warmupJobResult{}, fmt.Errorf("warming helper image is required")
+	}
+
 	job := buildWarmupJob(
 		policy,
 		targetNode,
 		image,
 		runID,
+		r.WarmupHelperImage,
 	)
 
 	err = r.Create(ctx, job)

@@ -226,6 +226,7 @@ func TestCurrentTimeUsesInjectedClock(t *testing.T) {
 		time.FixedZone(testOperatorLocationName, 2*60*60),
 	)
 	reconciler := &ImageWarmupPolicyReconciler{
+		WarmupHelperImage: testWarmupHelperImage,
 		Now: func() time.Time {
 			return want
 		},
